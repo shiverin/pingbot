@@ -1,0 +1,13 @@
+name: Keep Website Alive
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'  # Runs every 14 minutes
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make a GET request to the website
+        run: |
+          curl -X GET https://pdfiledit.onrender.com/
