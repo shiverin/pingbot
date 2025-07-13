@@ -1,0 +1,48 @@
+name: Keep Website Alive
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
+
+permissions:
+  contents: write  # Needed to push changes
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3
+
+      - name: Make a GET request to the website
+        run: |
+          curl -X GET https://pdfiledit.onrender.com/
+
+      - name: Read and update ping count, log every 100 pings
+        run: |
+          # Initialize count if file doesn't exist
+          if [ ! -f pdflog.txt ]; then
+            echo "0" > pdflog.txt
+          fi
+
+          count=$(tail -n 1 pdflog.txt)
+          if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+            count=0
+          fi
+          count=$((count + 1))
+
+          if [ $count -ge 100 ]; then
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - Website Ping Success (100th ping)" >> pdflog.txt
+            echo "0" >> pdflog.txt  # reset counter
+            git config --global user.name "github-actions"
+            git config --global user.email "actions@github.com"
+            git add pdflog.txt
+            git commit -m "Update pdflog.txt after 100 pings"
+            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:main
+          else
+            # just update the count without committing
+            # remove last line (old count)
+            head -n -1 pdflog.txt > temp.txt
+            mv temp.txt pdflog.txt
+            echo "$count" >> pdflog.txt
+          fi
