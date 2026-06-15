@@ -1,0 +1,81 @@
+name: Keep Render Apps Alive
+
+on:
+  schedule:
+    - cron: "3-58/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keep-render-apps-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync latest main
+        run: git pull --ff-only origin main
+
+      - name: Ping apps
+        id: ping
+        run: |
+          set +e
+          failed=0
+          should_log=1
+          log_dir="."
+
+          last_log="$(
+            {
+              tail -n 1 messengerlog.txt 2>/dev/null
+              tail -n 1 pdflog.txt 2>/dev/null
+              tail -n 1 oalphalog.txt 2>/dev/null
+            } | sed -n 's/^\([0-9-]\{10\} [0-9:]\{8\} UTC\).*/\1/p' | sort | tail -n 1
+          )"
+
+          if [ -n "$last_log" ]; then
+            last_epoch="$(date -u -d "$last_log" +%s)"
+            now_epoch="$(date -u +%s)"
+
+            if [ $((now_epoch - last_epoch)) -lt 7200 ]; then
+              should_log=0
+              log_dir="$(mktemp -d)"
+            fi
+          fi
+
+          echo "should_log=$should_log" >> "$GITHUB_OUTPUT"
+
+          bash scripts/ping_url.sh messenger https://messenger-ybyw.onrender.com/ "$log_dir/messengerlog.txt" || failed=1
+          bash scripts/ping_url.sh pdfiledit https://pdfiledit.onrender.com/ "$log_dir/pdflog.txt" || failed=1
+          bash scripts/ping_url.sh oalpha https://o-alpha.onrender.com/ "$log_dir/oalphalog.txt" || failed=1
+
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Commit logs
+        if: steps.ping.outputs.should_log == '1'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add messengerlog.txt pdflog.txt oalphalog.txt
+          if git diff --cached --quiet; then
+            echo "No log changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Log keepalive ping statuses"
+          git push
+
+      - name: Report ping failure
+        if: steps.ping.outputs.failed != '0'
+        run: |
+          echo "At least one app did not return a healthy response. Check the latest log commit for details."
+          exit 1
