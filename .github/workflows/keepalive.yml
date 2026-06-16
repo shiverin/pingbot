@@ -55,7 +55,7 @@ jobs:
 
           bash scripts/ping_url.sh messenger https://messenger-ybyw.onrender.com/ "$log_dir/messengerlog.txt" || failed=1
           bash scripts/ping_url.sh pdfiledit https://pdfiledit.onrender.com/ "$log_dir/pdflog.txt" || failed=1
-          bash scripts/ping_url.sh oalpha https://o-alpha.onrender.com/ "$log_dir/oalphalog.txt" || failed=1
+          bash scripts/ping_url.sh oalpha https://o-alpha.onrender.com/health "$log_dir/oalphalog.txt" || failed=1
 
           echo "failed=$failed" >> "$GITHUB_OUTPUT"
 
